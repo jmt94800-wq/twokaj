@@ -1,0 +1,8 @@
+{
+  "name": "Twokaj",
+  "description": "Application de troc agricole en Haïti - Échanges de main d'oeuvre, terrains, animaux, plantes, dons et outils.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
