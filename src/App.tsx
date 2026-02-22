@@ -781,32 +781,48 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isRegister) {
-      const newUser = { ...form, id: generateId(), categories: [] };
-      if (navigator.onLine) {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newUser)
-        });
-        if (res.ok) login(newUser);
+    try {
+      if (isRegister) {
+        const newUser = { ...form, id: generateId(), categories: [] };
+        if (navigator.onLine) {
+          const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newUser)
+          });
+          if (res.ok) {
+            login(newUser);
+            navigate('/');
+          } else {
+            const data = await res.json();
+            alert("Erreur d'inscription : " + (data.error || "Inconnu"));
+          }
+        } else {
+          await addToSyncQueue({ type: 'user', action: 'create', data: newUser });
+          login(newUser);
+          navigate('/');
+        }
       } else {
-        await addToSyncQueue({ type: 'user', action: 'create', data: newUser });
-        login(newUser);
+        if (navigator.onLine) {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: form.email, password: form.password })
+          });
+          if (res.ok) {
+            login(await res.json());
+            navigate('/');
+          } else {
+            const data = await res.json();
+            alert("Erreur de connexion : " + (data.error || "Identifiants invalides"));
+          }
+        } else {
+          alert("Koneksyon entènèt nesesè pou premye koneksyon an.");
+        }
       }
-    } else {
-      if (navigator.onLine) {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: form.email, password: form.password })
-        });
-        if (res.ok) login(await res.json());
-      } else {
-        alert("Koneksyon entènèt nesesè pou premye koneksyon an.");
-      }
+    } catch (err: any) {
+      alert("Erreur réseau : " + err.message);
     }
-    navigate('/');
   };
 
   return (

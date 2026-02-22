@@ -32,8 +32,8 @@ async function initDatabase() {
       await pgPool.query('SELECT 1');
       console.log("PostgreSQL connection successful");
 
-      await pgPool.query(`
-        CREATE TABLE IF NOT EXISTS users (
+      const queries = [
+        `CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
           name TEXT,
           pseudo TEXT UNIQUE,
@@ -45,8 +45,8 @@ async function initDatabase() {
           profile_photo TEXT,
           is_admin INTEGER DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS ads (
+        )`,
+        `CREATE TABLE IF NOT EXISTS ads (
           id TEXT PRIMARY KEY,
           user_id TEXT,
           type TEXT,
@@ -60,8 +60,8 @@ async function initDatabase() {
           photo TEXT,
           status TEXT DEFAULT 'open',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS messages (
+        )`,
+        `CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
           ad_id TEXT,
           sender_id TEXT,
@@ -69,14 +69,18 @@ async function initDatabase() {
           content TEXT,
           type TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS gallery (
+        )`,
+        `CREATE TABLE IF NOT EXISTS gallery (
           id TEXT PRIMARY KEY,
           photo_url TEXT,
           description TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
+        )`
+      ];
+
+      for (const q of queries) {
+        await pgPool.query(q);
+      }
     } else {
       db.exec(`
         CREATE TABLE IF NOT EXISTS users (
@@ -131,68 +135,68 @@ async function initDatabase() {
   }
 }
 
-async function startServer() {
-  await initDatabase();
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
-  // Helper for queries to handle syntax differences
-  const query = async (text: string, params: any[] = []) => {
-    let processedText = text;
-    if (!isPostgres) {
-      // Convert $1, $2 to ? for SQLite
-      processedText = text.replace(/\$\d+/g, '?');
-    }
-    
-    try {
-      if (isPostgres && pgPool) {
-        const res = await pgPool.query(processedText, params);
-        return res.rows;
+// Helper for queries to handle syntax differences
+const query = async (text: string, params: any[] = []) => {
+  let processedText = text;
+  if (!isPostgres) {
+    processedText = text.replace(/\$\d+/g, '?');
+  }
+  
+  try {
+    if (isPostgres && pgPool) {
+      const res = await pgPool.query(processedText, params);
+      return res.rows;
+    } else {
+      const stmt = db.prepare(processedText);
+      if (processedText.trim().toUpperCase().startsWith("SELECT")) {
+        return stmt.all(...params);
       } else {
-        const stmt = db.prepare(processedText);
-        if (processedText.trim().toUpperCase().startsWith("SELECT")) {
-          return stmt.all(...params);
-        } else {
-          return stmt.run(...params);
-        }
+        return stmt.run(...params);
       }
-    } catch (err) {
-      console.error("Query error:", err, "SQL:", processedText);
-      throw err;
     }
-  };
+  } catch (err) {
+    console.error("Query error:", err, "SQL:", processedText);
+    throw err;
+  }
+};
 
-  // API Routes
-  app.post("/api/auth/register", async (req, res) => {
-    const { id, name, pseudo, address, phone, email, password, categories, profile_photo } = req.body;
-    try {
-      await query(`
-        INSERT INTO users (id, name, pseudo, address, phone, email, password, categories, profile_photo)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `, [id, name, pseudo, address, phone, email, password, JSON.stringify(categories), profile_photo]);
-      res.json({ success: true, id });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
+// API Routes
+app.post("/api/auth/register", async (req, res) => {
+  const { id, name, pseudo, address, phone, email, password, categories, profile_photo } = req.body;
+  console.log("Registration attempt for:", pseudo, email);
+  try {
+    await query(`
+      INSERT INTO users (id, name, pseudo, address, phone, email, password, categories, profile_photo)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [id, name, pseudo, address, phone, email, password, JSON.stringify(categories || []), profile_photo || '']);
+    console.log("Registration successful for:", pseudo);
+    res.json({ success: true, id });
+  } catch (error: any) {
+    console.error("Registration error:", error.message);
+    res.status(400).json({ error: error.message });
+  }
+});
 
-  app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body;
-    try {
-      const rows = await query("SELECT * FROM users WHERE email = $1 AND password = $2", [email, password]);
-      const user = rows[0];
-      if (user) {
-        user.categories = JSON.parse(user.categories || '[]');
-        res.json(user);
-      } else {
-        res.status(401).json({ error: "Invalid credentials" });
-      }
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const rows = await query("SELECT * FROM users WHERE email = $1 AND password = $2", [email, password]);
+    const user = rows[0];
+    if (user) {
+      user.categories = JSON.parse(user.categories || '[]');
+      res.json(user);
+    } else {
+      res.status(401).json({ error: "Invalid credentials" });
     }
-  });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
   app.get("/api/ads", async (req, res) => {
     try {
@@ -321,7 +325,9 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
+async function startServer() {
+  await initDatabase();
+  
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -335,9 +341,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
