@@ -45,7 +45,7 @@ export default function App() {
 
   const t = translations[lang];
 
-  const appUrl = (process.env as any).APP_URL || window.location.origin;
+  const appUrl = window.location.origin;
 
   useEffect(() => {
     const handleStatus = () => setIsOnline(navigator.onLine);
@@ -208,9 +208,15 @@ export default function App() {
   }, [filters]);
 
   const fetchGallery = async () => {
-    const res = await fetch('/api/gallery');
-    const data = await res.json();
-    setGallery(data);
+    try {
+      const res = await fetch('/api/gallery');
+      if (res.ok) {
+        const data = await res.json();
+        setGallery(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch gallery', e);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

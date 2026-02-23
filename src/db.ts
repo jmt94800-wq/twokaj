@@ -54,7 +54,8 @@ export const saveUser = async (user: any) => {
 
 export const getUser = async () => {
   const db = await initDB();
-  return db.get('user', 'id'); // This might be tricky if we don't know the ID, but we only store one user
+  const users = await db.getAll('user');
+  return users[0];
 };
 
 export const addToSyncQueue = async (action: SyncAction) => {

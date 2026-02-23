@@ -202,6 +202,16 @@ async function startServer() {
 
   app.use(express.json({ limit: '5mb' }));
 
+  // Request logger
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`${req.method} ${req.url} ${res.statusCode} - ${duration}ms`);
+    });
+    next();
+  });
+
   // Health check for Cloud Run
   app.get("/health", (req, res) => {
     res.status(200).send("OK");
