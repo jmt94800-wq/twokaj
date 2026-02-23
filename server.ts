@@ -141,6 +141,44 @@ if (!process.env.POSTGRES_URL) {
   initPostgres().catch(console.error);
 }
 
+// Database helpers to support both SQLite and Postgres
+async function dbQuery(text: string, params: any[] = []) {
+  if (process.env.POSTGRES_URL) {
+    let i = 0;
+    const pgQuery = text.replace(/\?/g, () => `$${++i}`);
+    const result = await sql.query(pgQuery, params);
+    return result.rows;
+  } else {
+    return db.prepare(text).all(...params);
+  }
+}
+
+async function dbGet(text: string, params: any[] = []) {
+  if (process.env.POSTGRES_URL) {
+    let i = 0;
+    const pgQuery = text.replace(/\?/g, () => `$${++i}`);
+    const result = await sql.query(pgQuery, params);
+    return result.rows[0];
+  } else {
+    return db.prepare(text).get(...params);
+  }
+}
+
+async function dbRun(text: string, params: any[] = []) {
+  if (process.env.POSTGRES_URL) {
+    let i = 0;
+    const pgQuery = text.replace(/\?/g, () => `$${++i}`);
+    // For Postgres, we append RETURNING id to get the last insert ID if it's an INSERT
+    const isInsert = text.trim().toUpperCase().startsWith("INSERT");
+    const finalQuery = isInsert ? `${pgQuery} RETURNING id` : pgQuery;
+    const result = await sql.query(finalQuery, params);
+    return { lastInsertRowid: (result.rows[0] as any)?.id };
+  } else {
+    const info = db.prepare(text).run(...params);
+    return { lastInsertRowid: info.lastInsertRowid };
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -164,37 +202,37 @@ async function startServer() {
   });
 
   // API Routes
-  app.post("/api/register", (req, res) => {
+  app.post("/api/register", async (req, res) => {
     const { name, pseudo, address, city, phone, image_data, password } = req.body;
     try {
-      const info = db.prepare("INSERT INTO users (name, pseudo, address, city, phone, image_data, password) VALUES (?, ?, ?, ?, ?, ?, ?)").run(name, pseudo, address, city, phone, image_data, password);
+      const info = await dbRun("INSERT INTO users (name, pseudo, address, city, phone, image_data, password) VALUES (?, ?, ?, ?, ?, ?, ?)", [name, pseudo, address, city, phone, image_data, password]);
       res.json({ id: info.lastInsertRowid });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
   });
 
-  app.post("/api/login", (req, res) => {
+  app.post("/api/login", async (req, res) => {
     const { pseudo, password } = req.body;
-    const user = db.prepare("SELECT * FROM users WHERE pseudo = ? AND password = ?").get(pseudo, password);
+    const user = await dbGet("SELECT * FROM users WHERE pseudo = ? AND password = ?", [pseudo, password]);
     if (user) res.json(user);
     else res.status(401).json({ error: "Pseudo ou mot de passe incorrect." });
   });
 
-  app.post("/api/ads", (req, res) => {
+  app.post("/api/ads", async (req, res) => {
     const { user_id, type, category, title, description, exchange_category, start_date, end_date, is_all_year, image_data } = req.body;
     try {
-      const info = db.prepare(`
+      const info = await dbRun(`
         INSERT INTO ads (user_id, type, category, title, description, exchange_category, start_date, end_date, is_all_year, image_data)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(user_id, type, category, title, description, exchange_category, start_date, end_date, is_all_year ? 1 : 0, image_data);
+      `, [user_id, type, category, title, description, exchange_category, start_date, end_date, is_all_year ? 1 : 0, image_data]);
       res.json({ id: info.lastInsertRowid });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
   });
 
-  app.get("/api/ads", (req, res) => {
+  app.get("/api/ads", async (req, res) => {
     const { category, city, date } = req.query;
     let query = `
       SELECT ads.*, users.pseudo, users.city as user_city, users.image_data as user_image
@@ -225,19 +263,19 @@ async function startServer() {
 
     query += " ORDER BY ads.created_at DESC";
 
-    const ads = db.prepare(query).all(...params);
+    const ads = await dbQuery(query, params);
     res.json(ads);
   });
 
-  app.get("/api/gallery", (req, res) => {
-    const images = db.prepare("SELECT * FROM gallery ORDER BY created_at DESC").all();
+  app.get("/api/gallery", async (req, res) => {
+    const images = await dbQuery("SELECT * FROM gallery ORDER BY created_at DESC");
     res.json(images);
   });
 
-  app.post("/api/gallery", (req, res) => {
+  app.post("/api/gallery", async (req, res) => {
     const { image_data, caption } = req.body;
     try {
-      const info = db.prepare("INSERT INTO gallery (image_data, caption) VALUES (?, ?)").run(image_data, caption);
+      const info = await dbRun("INSERT INTO gallery (image_data, caption) VALUES (?, ?)", [image_data, caption]);
       res.json({ id: info.lastInsertRowid });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
@@ -245,24 +283,24 @@ async function startServer() {
   });
 
   // Messaging Routes
-  app.post("/api/messages", (req, res) => {
+  app.post("/api/messages", async (req, res) => {
     const { ad_id, sender_id, receiver_id, content, type } = req.body;
     try {
-      const info = db.prepare(`
+      const info = await dbRun(`
         INSERT INTO messages (ad_id, sender_id, receiver_id, content, type)
         VALUES (?, ?, ?, ?, ?)
-      `).run(ad_id, sender_id, receiver_id, content, type || 'normal');
+      `, [ad_id, sender_id, receiver_id, content, type || 'normal']);
       res.json({ id: info.lastInsertRowid });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
   });
 
-  app.get("/api/messages/ad/:adId", (req, res) => {
+  app.get("/api/messages/ad/:adId", async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: "userId is required" });
 
-    const ad = db.prepare("SELECT user_id FROM ads WHERE id = ?").get(req.params.adId) as any;
+    const ad = await dbGet("SELECT user_id FROM ads WHERE id = ?", [req.params.adId]) as any;
     if (!ad) return res.status(404).json({ error: "Ad not found" });
 
     let query = `
@@ -282,12 +320,12 @@ async function startServer() {
 
     query += " ORDER BY m.created_at ASC";
     
-    const messages = db.prepare(query).all(...params);
+    const messages = await dbQuery(query, params);
     res.json(messages);
   });
 
-  app.get("/api/messages/user/:userId", (req, res) => {
-    const messages = db.prepare(`
+  app.get("/api/messages/user/:userId", async (req, res) => {
+    const messages = await dbQuery(`
       SELECT m.*, s.pseudo as sender_pseudo, r.pseudo as receiver_pseudo, a.title as ad_title
       FROM messages m
       JOIN users s ON m.sender_id = s.id
@@ -295,14 +333,14 @@ async function startServer() {
       JOIN ads a ON m.ad_id = a.id
       WHERE m.sender_id = ? OR m.receiver_id = ?
       ORDER BY m.created_at DESC
-    `).all(req.params.userId, req.params.userId);
+    `, [req.params.userId, req.params.userId]);
     res.json(messages);
   });
 
-  app.patch("/api/ads/:id/status", (req, res) => {
+  app.patch("/api/ads/:id/status", async (req, res) => {
     const { status } = req.body;
     try {
-      db.prepare("UPDATE ads SET status = ? WHERE id = ?").run(status, req.params.id);
+      await dbRun("UPDATE ads SET status = ? WHERE id = ?", [status, req.params.id]);
       res.json({ success: true });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
