@@ -790,12 +790,18 @@ const Login = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newUser)
           });
+          
           if (res.ok) {
             login(newUser);
             navigate('/');
           } else {
-            const data = await res.json();
-            alert("Erreur d'inscription : " + (data.error || "Inconnu"));
+            const text = await res.text();
+            try {
+              const data = JSON.parse(text);
+              alert("Erreur d'inscription : " + (data.error || "Inconnu"));
+            } catch (e) {
+              alert("Erreur Serveur (Vercel) : " + text.substring(0, 100));
+            }
           }
         } else {
           await addToSyncQueue({ type: 'user', action: 'create', data: newUser });
@@ -813,8 +819,13 @@ const Login = () => {
             login(await res.json());
             navigate('/');
           } else {
-            const data = await res.json();
-            alert("Erreur de connexion : " + (data.error || "Identifiants invalides"));
+            const text = await res.text();
+            try {
+              const data = JSON.parse(text);
+              alert("Erreur de connexion : " + (data.error || "Identifiants invalides"));
+            } catch (e) {
+              alert("Erreur Serveur (Vercel) : " + text.substring(0, 100));
+            }
           }
         } else {
           alert("Koneksyon entènèt nesesè pou premye koneksyon an.");
