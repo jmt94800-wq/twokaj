@@ -7,7 +7,7 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
-const isPostgres = !!(process.env.POSTGRES_URL || process.env.PROD_POSTGRES_URL || process.env.DATABASE_URL || process.env.PROD_DATABASE_URL);
+const isPostgres = !!(process.env.POSTGRES_URL || process.env.PROD_POSTGRES_URL || process.env.PROD_DATABASE_URL || process.env.DATABASE_URL);
 const isVercel = !!process.env.VERCEL;
 
 app.use(express.json({ limit: '10mb' }));

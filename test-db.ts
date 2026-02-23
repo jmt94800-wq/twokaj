@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function testConnection() {
-  const postgresUrl = process.env.POSTGRES_URL;
+  const postgresUrl = process.env.PROD_POSTGRES_URL;
 
   if (postgresUrl) {
     console.log('--- Testing PostgreSQL Connection ---');
