@@ -4,8 +4,17 @@ let pool: Pool | null = null;
 
 export async function getPostgresPool() {
   if (!pool) {
+    const connectionString = process.env.PROD_POSTGRES_URL || 
+                             process.env.POSTGRES_URL || 
+                             process.env.PROD_DATABASE_URL || 
+                             process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error("No PostgreSQL connection string found in environment variables (checked PROD_POSTGRES_URL, POSTGRES_URL, etc.)");
+    }
+
     pool = new Pool({
-      connectionString: process.env.POSTGRES_URL,
+      connectionString,
       ssl: { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30000,
