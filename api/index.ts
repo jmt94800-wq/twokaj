@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
 import { pgQuery, initPostgresTables } from "../src/db-postgres";
@@ -9,6 +8,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 const isPostgres = !!process.env.POSTGRES_URL;
+const isVercel = !!process.env.VERCEL;
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -16,15 +16,17 @@ app.use(express.json({ limit: '10mb' }));
 let dbInitialized = false;
 async function ensureDb() {
   if (dbInitialized) return;
+  
   if (isPostgres) {
     try {
       await initPostgresTables();
       dbInitialized = true;
     } catch (e) {
       console.error("Postgres init failed", e);
-      throw e;
+      // Don't throw here to allow the app to at least respond
     }
-  } else {
+  } else if (!isVercel) {
+    // SQLite logic ONLY for local development
     try {
       const Database = (await import("better-sqlite3")).default;
       const db = new Database("twokaj.db");
@@ -48,7 +50,7 @@ const query = async (text: string, params: any[] = []) => {
     return pgQuery(text, params);
   } else {
     const db = (global as any).sqliteDb;
-    if (!db) throw new Error("Database not ready");
+    if (!db) throw new Error("Database not ready (SQLite only works locally)");
     const processedText = text.replace(/\$\d+/g, '?');
     const stmt = db.prepare(processedText);
     return processedText.trim().toUpperCase().startsWith("SELECT") ? stmt.all(...params) : stmt.run(...params);
@@ -126,14 +128,15 @@ app.post("/api/gallery", async (req, res) => {
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
-// Vite / Static (Only for local dev)
-if (process.env.NODE_ENV !== "production") {
-  const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+// Vite / Static (Only for local development)
+if (process.env.NODE_ENV !== "production" && !isVercel) {
+  const viteImport = await import("vite");
+  const vite = await viteImport.createServer({ server: { middlewareMode: true }, appType: "spa" });
   app.use(vite.middlewares);
 }
 
 // Local listen
-if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+if (!isVercel) {
   app.listen(PORT, "0.0.0.0", () => console.log(`Server on ${PORT}`));
 }
 
