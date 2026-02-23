@@ -1,18 +1,27 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
 import path from "path";
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const app = express();
+
 const dbPath = process.env.VERCEL ? "/tmp/miam_miam.db" : (process.env.DATABASE_PATH || "miam_miam.db");
 let db: any;
+let pgSql: any;
+
+if (process.env.POSTGRES_URL) {
+  pgSql = neon(process.env.POSTGRES_URL);
+}
 
 async function initPostgres() {
-  await sql`
+  if (!pgSql) return;
+  
+  await pgSql(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -24,9 +33,9 @@ async function initPostgres() {
       password TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-  `;
+  `);
 
-  await sql`
+  await pgSql(`
     CREATE TABLE IF NOT EXISTS ads (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -42,9 +51,9 @@ async function initPostgres() {
       status TEXT DEFAULT 'open',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-  `;
+  `);
 
-  await sql`
+  await pgSql(`
     CREATE TABLE IF NOT EXISTS messages (
       id SERIAL PRIMARY KEY,
       ad_id INTEGER NOT NULL REFERENCES ads(id),
@@ -54,16 +63,16 @@ async function initPostgres() {
       type TEXT DEFAULT 'normal',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-  `;
+  `);
 
-  await sql`
+  await pgSql(`
     CREATE TABLE IF NOT EXISTS gallery (
       id SERIAL PRIMARY KEY,
       image_data TEXT NOT NULL,
       caption TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-  `;
+  `);
 }
 
 if (!process.env.POSTGRES_URL) {
@@ -146,8 +155,7 @@ async function dbQuery(text: string, params: any[] = []) {
   if (process.env.POSTGRES_URL) {
     let i = 0;
     const pgQuery = text.replace(/\?/g, () => `$${++i}`);
-    const result = await sql.query(pgQuery, params);
-    return result.rows;
+    return await pgSql(pgQuery, params);
   } else {
     return db.prepare(text).all(...params);
   }
@@ -157,8 +165,8 @@ async function dbGet(text: string, params: any[] = []) {
   if (process.env.POSTGRES_URL) {
     let i = 0;
     const pgQuery = text.replace(/\?/g, () => `$${++i}`);
-    const result = await sql.query(pgQuery, params);
-    return result.rows[0];
+    const rows = await pgSql(pgQuery, params);
+    return rows[0];
   } else {
     return db.prepare(text).get(...params);
   }
@@ -168,11 +176,10 @@ async function dbRun(text: string, params: any[] = []) {
   if (process.env.POSTGRES_URL) {
     let i = 0;
     const pgQuery = text.replace(/\?/g, () => `$${++i}`);
-    // For Postgres, we append RETURNING id to get the last insert ID if it's an INSERT
     const isInsert = text.trim().toUpperCase().startsWith("INSERT");
     const finalQuery = isInsert ? `${pgQuery} RETURNING id` : pgQuery;
-    const result = await sql.query(finalQuery, params);
-    return { lastInsertRowid: (result.rows[0] as any)?.id };
+    const rows = await pgSql(finalQuery, params);
+    return { lastInsertRowid: (rows[0] as any)?.id };
   } else {
     const info = db.prepare(text).run(...params);
     return { lastInsertRowid: info.lastInsertRowid };
@@ -180,7 +187,6 @@ async function dbRun(text: string, params: any[] = []) {
 }
 
 async function startServer() {
-  const app = express();
   const PORT = parseInt(process.env.PORT || "3000", 10);
 
   console.log(`Starting server on port ${PORT}...`);
