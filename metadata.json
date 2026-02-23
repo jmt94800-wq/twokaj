@@ -1,8 +1,5 @@
 {
-  "name": "Twokaj",
-  "description": "Application de troc agricole en Haïti - Échanges de main d'oeuvre, terrains, animaux, plantes, dons et outils.",
-  "requestFramePermissions": [
-    "camera",
-    "geolocation"
-  ]
+  "name": "Miam-Miam",
+  "description": "Une plateforme de troc agricole en Haïti pour échanger main-d'œuvre, terrains, animaux, plantes et outils.",
+  "requestFramePermissions": []
 }

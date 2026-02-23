@@ -1,92 +1,56 @@
-import { Pool } from "pg";
+import { sql } from '@vercel/postgres';
 
-let pool: Pool | null = null;
-
-export async function getPostgresPool() {
-  if (!pool) {
-    const connectionString = process.env.PROD_POSTGRES_URL || 
-                             process.env.PROD_POSTGRES_URL || 
-                             process.env.PROD_DATABASE_URL || 
-                             process.env.PROD_DATABASE_URL;
-
-    if (!connectionString) {
-      throw new Error("No PostgreSQL connection string found in environment variables (checked PROD_POSTGRES_URL, POSTGRES_URL, etc.)");
-    }
-
-    pool = new Pool({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    
-    // Test connection
-    try {
-      await pool.query('SELECT 1');
-      console.log("PostgreSQL Connected");
-    } catch (err) {
-      console.error("PostgreSQL Connection Error:", err);
-      throw err;
-    }
-  }
-  return pool;
-}
-
-export async function pgQuery(text: string, params: any[] = []) {
-  const p = await getPostgresPool();
-  const res = await p.query(text, params);
-  return res.rows;
-}
-
-export async function initPostgresTables() {
-  const queries = [
-    `CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      pseudo TEXT UNIQUE,
-      address TEXT,
+export async function initPostgres() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      pseudo TEXT UNIQUE NOT NULL,
+      address TEXT NOT NULL,
+      city TEXT NOT NULL,
       phone TEXT,
-      email TEXT UNIQUE,
+      image_data TEXT,
       password TEXT,
-      categories TEXT,
-      profile_photo TEXT,
-      is_admin INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS ads (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      type TEXT,
-      category TEXT,
-      title TEXT,
+    );
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS ads (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      type TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
       description TEXT,
-      location TEXT,
-      start_date TEXT,
-      end_date TEXT,
-      availability TEXT,
-      photo TEXT,
+      exchange_category TEXT NOT NULL,
+      start_date DATE,
+      end_date DATE,
+      is_all_year BOOLEAN DEFAULT FALSE,
+      image_data TEXT,
       status TEXT DEFAULT 'open',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      ad_id TEXT,
-      sender_id TEXT,
-      receiver_id TEXT,
-      content TEXT,
-      type TEXT,
+    );
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      ad_id INTEGER NOT NULL REFERENCES ads(id),
+      sender_id INTEGER NOT NULL REFERENCES users(id),
+      receiver_id INTEGER NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'normal',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS gallery (
-      id TEXT PRIMARY KEY,
-      photo_url TEXT,
-      description TEXT,
+    );
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS gallery (
+      id SERIAL PRIMARY KEY,
+      image_data TEXT NOT NULL,
+      caption TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`
-  ];
-  for (const q of queries) {
-    await pgQuery(q);
-  }
-  console.log("PostgreSQL Tables Initialized");
+    );
+  `;
 }

@@ -1,1103 +1,1386 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, AuthProvider } from './AuthContext';
-import { useLanguage, LanguageProvider } from './LanguageContext';
-import { CATEGORIES } from './constants';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Home, 
-  PlusCircle, 
-  User, 
-  MessageSquare, 
-  Image as ImageIcon, 
-  Globe, 
-  LogOut, 
   Search, 
-  Filter, 
-  Share2, 
-  CheckCircle, 
-  XCircle, 
-  MessageCircle,
-  Menu,
+  Plus, 
+  User as UserIcon, 
+  MapPin, 
+  Calendar, 
+  ArrowRightLeft, 
+  Filter,
   X,
   ChevronRight,
-  Calendar,
+  LogOut,
   Clock,
-  MapPin
+  Share2,
+  Globe,
+  Wifi
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { format } from 'date-fns';
-import { fr, ht } from 'date-fns/locale';
-import { resizeImage, generateId } from './utils';
-import { initDB, addToSyncQueue } from './services/db';
-import './sync';
+import { Message, Category, User, Ad, GalleryImage, CATEGORIES, MONTHS, DAYS } from './types';
+import { MessageSquare, CheckCircle2, XCircle, Send, Languages } from 'lucide-react';
+import * as db from './db';
+import { translations, Language } from './translations';
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-// --- Components ---
-
-const Navbar = () => {
-  const { user, logout, isOffline } = useAuth();
-  const { language, setLanguage, t } = useLanguage();
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-      {isOffline && (
-        <div className="bg-orange-500 text-white text-xs py-1 text-center font-medium">
-          {t('offline')}
-        </div>
-      )}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
-              T
-            </div>
-            <span className="text-xl font-bold text-gray-900 tracking-tight">Twokaj</span>
-          </Link>
-
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-6">
-            <Link to="/" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">{t('allAds')}</Link>
-            <Link to="/gallery" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">{t('gallery')}</Link>
-            {user ? (
-              <>
-                <Link to="/create" className="flex items-center space-x-1 text-emerald-600 hover:text-emerald-700 font-semibold">
-                  <PlusCircle size={18} />
-                  <span>{t('createAd')}</span>
-                </Link>
-                <Link to="/messages" className="text-gray-600 hover:text-emerald-600 transition-colors">
-                  <MessageSquare size={20} />
-                </Link>
-                <Link to="/profile" className="text-gray-600 hover:text-emerald-600 transition-colors">
-                  <User size={20} />
-                </Link>
-                <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors">
-                  <LogOut size={20} />
-                </button>
-              </>
-            ) : (
-              <Link to="/login" className="bg-emerald-600 text-white px-4 py-2 rounded-full font-medium hover:bg-emerald-700 transition-all shadow-md active:scale-95">
-                {t('login')}
-              </Link>
-            )}
-            <button 
-              onClick={() => setLanguage(language === 'fr' ? 'ht' : 'fr')}
-              className="flex items-center space-x-1 text-xs font-bold uppercase tracking-wider text-gray-400 border border-gray-200 px-2 py-1 rounded hover:bg-gray-50"
-            >
-              <Globe size={14} />
-              <span>{language === 'fr' ? 'HT' : 'FR'}</span>
-            </button>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center space-x-4">
-            <button onClick={() => setLanguage(language === 'fr' ? 'ht' : 'fr')} className="text-gray-400">
-              <Globe size={20} />
-            </button>
-            <button onClick={() => setIsOpen(!isOpen)} className="text-gray-600">
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-white border-t border-gray-100 overflow-hidden"
-          >
-            <div className="px-4 pt-2 pb-6 space-y-2">
-              <Link to="/" onClick={() => setIsOpen(false)} className="block py-3 text-gray-700 font-medium border-b border-gray-50">{t('allAds')}</Link>
-              {user ? (
-                <>
-                  <Link to="/create" onClick={() => setIsOpen(false)} className="block py-3 text-emerald-600 font-semibold border-b border-gray-50">{t('createAd')}</Link>
-                  <Link to="/messages" onClick={() => setIsOpen(false)} className="block py-3 text-gray-700 font-medium border-b border-gray-50">{t('letChat')}</Link>
-                  <Link to="/profile" onClick={() => setIsOpen(false)} className="block py-3 text-gray-700 font-medium border-b border-gray-50">{t('myAds')}</Link>
-                  <button onClick={() => { logout(); setIsOpen(false); }} className="block w-full text-left py-3 text-red-500 font-medium">{t('login')}</button>
-                </>
-              ) : (
-                <Link to="/login" onClick={() => setIsOpen(false)} className="block py-3 text-emerald-600 font-semibold">{t('login')}</Link>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </nav>
-  );
-};
-
-// --- Pages ---
-
-const HomeView = () => {
-  const { t, language } = useLanguage();
-  const [ads, setAds] = useState<any[]>([]);
-  const [filter, setFilter] = useState({ category: '', location: '', type: '' });
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [ads, setAds] = useState<Ad[]>([]);
+  const [gallery, setGallery] = useState<GalleryImage[]>([]);
+  const [showRegister, setShowRegister] = useState(false);
+  const [showCreateAd, setShowCreateAd] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [filters, setFilters] = useState({
+    category: '',
+    city: '',
+    date: ''
+  });
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
+  const [adMessages, setAdMessages] = useState<Message[]>([]);
+  const [messageContent, setMessageContent] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
+  const [userMessages, setUserMessages] = useState<Message[]>([]);
+  const [replyToUser, setReplyToUser] = useState<{id: number, pseudo: string} | null>(null);
+  const [lang, setLang] = useState<Language>('fr');
+
+  const t = translations[lang];
+
+  const appUrl = (process.env as any).APP_URL || window.location.origin;
 
   useEffect(() => {
-    const fetchAds = async () => {
-      try {
-        const db = await initDB();
-        const localAds = await db.getAll('ads');
-        setAds(localAds.filter(a => a.status === 'open').sort((a, b) => b.created_at.localeCompare(a.created_at)));
-        
-        if (navigator.onLine) {
-          const res = await fetch('/api/ads');
-          const data = await res.json();
-          setAds(data);
-          // Update local DB
-          for (const ad of data) {
-            await db.put('ads', ad);
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+    const handleStatus = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', handleStatus);
+    window.addEventListener('offline', handleStatus);
+
+    // Listen for SW messages
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'SYNC_REQUIRED') {
+        processSyncQueue();
       }
     };
-    fetchAds();
+    navigator.serviceWorker?.addEventListener('message', handleSWMessage);
+
+    // Initial load from DB
+    const loadFromDB = async () => {
+      const cachedAds = await db.getAds();
+      if (cachedAds.length > 0) setAds(cachedAds as Ad[]);
+      
+      // We don't have a reliable way to get the specific user without ID, 
+      // but db.getUser() returns the first one found in the store
+      const cachedUser = await db.getUser();
+      if (cachedUser) setUser(cachedUser as User);
+    };
+    loadFromDB();
+
+    return () => {
+      window.removeEventListener('online', handleStatus);
+      window.removeEventListener('offline', handleStatus);
+      navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
+    };
   }, []);
 
-  const filteredAds = ads.filter(ad => {
-    return (
-      (!filter.category || ad.category === filter.category) &&
-      (!filter.location || ad.location.toLowerCase().includes(filter.location.toLowerCase())) &&
-      (!filter.type || ad.type === filter.type)
-    );
-  });
+  const processSyncQueue = async () => {
+    if (!navigator.onLine) return;
+    const queue = await db.getSyncQueue();
+    for (const action of queue) {
+      try {
+        let success = false;
+        if (action.type === 'CREATE_AD') {
+          const res = await fetch('/api/ads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(action.payload)
+          });
+          success = res.ok;
+        } else if (action.type === 'SEND_MESSAGE') {
+          const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(action.payload)
+          });
+          success = res.ok;
+        } else if (action.type === 'REGISTER_USER') {
+          const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(action.payload)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const updatedUser = { ...action.payload, id: data.id };
+            setUser(updatedUser);
+            await db.saveUser(updatedUser);
+            success = true;
+          }
+        }
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div className="flex-1 space-y-4">
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{t('allAds')}</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" 
-                placeholder={t('location')}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                value={filter.location}
-                onChange={e => setFilter({ ...filter, location: e.target.value })}
-              />
-            </div>
-            <select 
-              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none bg-white"
-              value={filter.category}
-              onChange={e => setFilter({ ...filter, category: e.target.value })}
-            >
-              <option value="">{t('category')}</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.label[language]}</option>
-              ))}
-            </select>
-            <select 
-              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none bg-white"
-              value={filter.type}
-              onChange={e => setFilter({ ...filter, type: e.target.value })}
-            >
-              <option value="">Type</option>
-              <option value="proposition">{t('proposition')}</option>
-              <option value="demand">{t('demand')}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAds.map(ad => (
-            <AdCard key={ad.id} ad={ad} />
-          ))}
-          {filteredAds.length === 0 && (
-            <div className="col-span-full text-center py-20 text-gray-500 italic">
-              Aucune annonce trouvée.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const AdCard = ({ ad }: any) => {
-  const { t, language } = useLanguage();
-  const navigate = useNavigate();
-  const categoryLabel = CATEGORIES.find(c => c.id === ad.category)?.label[language];
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4 }}
-      onClick={() => navigate(`/ad/${ad.id}`)}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden group"
-    >
-      <div className="aspect-[4/3] relative bg-gray-100 overflow-hidden">
-        {ad.photo ? (
-          <img src={ad.photo} alt={ad.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-300">
-            <ImageIcon size={48} />
-          </div>
-        )}
-        <div className="absolute top-3 left-3">
-          <span className={cn(
-            "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm",
-            ad.type === 'proposition' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
-          )}>
-            {ad.type === 'proposition' ? t('proposition') : t('demand')}
-          </span>
-        </div>
-      </div>
-      <div className="p-5 space-y-3">
-        <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 uppercase tracking-widest">
-          <span>{categoryLabel}</span>
-          <span className="text-gray-400 font-normal">{format(new Date(ad.created_at), 'dd MMM yyyy', { locale: language === 'fr' ? fr : ht })}</span>
-        </div>
-        <h3 className="text-lg font-bold text-gray-900 line-clamp-1">{ad.title}</h3>
-        <div className="flex items-center text-gray-500 text-sm">
-          <MapPin size={14} className="mr-1" />
-          <span>{ad.location}</span>
-        </div>
-        <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold">
-              {ad.pseudo?.[0]?.toUpperCase()}
-            </div>
-            <span className="text-xs text-gray-600 font-medium">{ad.pseudo}</span>
-          </div>
-          <ChevronRight size={16} className="text-gray-300" />
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-const AdDetail = () => {
-  const { id } = useParams<{ id: string }>();
-  const { t, language } = useLanguage();
-  const { user } = useAuth();
-  const [ad, setAd] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const navigate = useNavigate();
+        if (success) {
+          await db.removeFromSyncQueue(action.id!);
+        }
+      } catch (e) {
+        console.error('Sync failed for action', action, e);
+      }
+    }
+    fetchAds();
+  };
 
   useEffect(() => {
-    const fetchAd = async () => {
-      const db = await initDB();
-      const localAd = await db.get('ads', id!);
-      setAd(localAd);
-      
-      if (user) {
-        const res = await fetch(`/api/messages/${user.id}`);
-        const data = await res.json();
-        setMessages(data.filter((m: any) => m.ad_id === id));
-      }
-    };
-    fetchAd();
-  }, [id, user]);
-
-  if (!ad) return null;
-
-  const handleContact = async () => {
-    if (!user) return navigate('/login');
-    const msg = {
-      id: generateId(),
-      ad_id: ad.id,
-      sender_id: user.id,
-      receiver_id: ad.user_id,
-      content: "Mwen enterese nan anons ou a.",
-      type: 'contact'
-    };
-    
-    if (navigator.onLine) {
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg)
-      });
-    } else {
-      await addToSyncQueue({ type: 'message', action: 'create', data: msg });
+    if (isOnline) {
+      processSyncQueue();
     }
-    setMessages([...messages, { ...msg, sender_pseudo: user.pseudo }]);
-  };
+  }, [isOnline]);
 
-  const handleChat = async () => {
-    if (!newMessage.trim()) return;
-    const msg = {
-      id: generateId(),
-      ad_id: ad.id,
-      sender_id: user.id,
-      receiver_id: user.id === ad.user_id ? messages[0].sender_id : ad.user_id,
-      content: newMessage,
-      type: 'chat'
-    };
-    
-    if (navigator.onLine) {
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg)
-      });
-    } else {
-      await addToSyncQueue({ type: 'message', action: 'create', data: msg });
-    }
-    setMessages([...messages, { ...msg, sender_pseudo: user.pseudo }]);
-    setNewMessage('');
-  };
-
-  const handleAction = async (type: 'deal' | 'refuse') => {
-    const msg = {
-      id: generateId(),
-      ad_id: ad.id,
-      sender_id: user.id,
-      receiver_id: messages[0].sender_id,
-      content: type === 'deal' ? "Sa mache !" : "Mwen pa enterese",
-      type
-    };
-    
-    if (navigator.onLine) {
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg)
-      });
-    } else {
-      await addToSyncQueue({ type: 'message', action: 'create', data: msg });
-    }
-    setMessages([...messages, { ...msg, sender_pseudo: user.pseudo }]);
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden">
-        <div className="aspect-video relative bg-gray-100">
-          {ad.photo ? (
-            <img src={ad.photo} alt={ad.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-300">
-              <ImageIcon size={64} />
-            </div>
-          )}
-          <div className="absolute bottom-6 left-6 flex gap-2">
-            <span className={cn(
-              "px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider shadow-lg backdrop-blur-md",
-              ad.type === 'proposition' ? "bg-emerald-500/80 text-white" : "bg-blue-500/80 text-white"
-            )}>
-              {ad.type === 'proposition' ? t('proposition') : t('demand')}
-            </span>
-          </div>
-        </div>
-
-        <div className="p-8 space-y-8">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold text-gray-900">{ad.title}</h1>
-              <button 
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: ad.title,
-                      text: ad.description,
-                      url: window.location.href
-                    });
-                  } else {
-                    navigator.clipboard.writeText(window.location.href);
-                    alert("Lien copié !");
-                  }
-                }}
-                className="p-2 hover:bg-gray-50 rounded-full text-gray-400 transition-colors"
-              >
-                <Share2 size={24} />
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-6 text-sm text-gray-500">
-              <div className="flex items-center">
-                <MapPin size={18} className="mr-2 text-emerald-600" />
-                <span>{ad.location}</span>
-              </div>
-              <div className="flex items-center">
-                <Calendar size={18} className="mr-2 text-emerald-600" />
-                <span>{ad.start_date} - {ad.end_date}</span>
-              </div>
-              <div className="flex items-center">
-                <User size={18} className="mr-2 text-emerald-600" />
-                <span>{ad.pseudo}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="prose prose-emerald max-w-none">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
-            <p className="text-gray-600 leading-relaxed">{ad.description}</p>
-          </div>
-
-          {ad.availability && (
-            <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
-              <h3 className="font-bold text-gray-900 flex items-center">
-                <Clock size={20} className="mr-2 text-emerald-600" />
-                {t('availability')}
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {Object.entries(ad.availability).map(([day, times]: any) => (
-                  <div key={day} className="text-sm">
-                    <span className="font-semibold block text-gray-700">{day}</span>
-                    <span className="text-gray-500">{times.start} - {times.end}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {user && user.id !== ad.user_id && messages.length === 0 && (
-            <button 
-              onClick={handleContact}
-              className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all active:scale-[0.98]"
-            >
-              {t('contactMe')}
-            </button>
-          )}
-
-          {messages.length > 0 && (
-            <div className="space-y-6 pt-8 border-t border-gray-100">
-              <h3 className="text-xl font-bold text-gray-900">{t('letChat')}</h3>
-              <div className="space-y-4 max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-2xl">
-                {messages.map(m => (
-                  <div key={m.id} className={cn(
-                    "flex flex-col max-w-[80%]",
-                    m.sender_id === user?.id ? "ml-auto items-end" : "items-start"
-                  )}>
-                    <span className="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-tighter">{m.sender_pseudo}</span>
-                    <div className={cn(
-                      "px-4 py-2 rounded-2xl text-sm shadow-sm",
-                      m.sender_id === user?.id ? "bg-emerald-600 text-white rounded-tr-none" : "bg-white text-gray-700 rounded-tl-none"
-                    )}>
-                      {m.content}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  placeholder="Ekri yon mesaj..."
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-                <button 
-                  onClick={handleChat}
-                  className="bg-emerald-600 text-white px-6 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
-                >
-                  <MessageCircle size={20} />
-                </button>
-              </div>
-
-              {user?.id === ad.user_id && (
-                <div className="grid grid-cols-2 gap-4 pt-4">
-                  <button 
-                    onClick={() => handleAction('deal')}
-                    className="flex items-center justify-center space-x-2 bg-emerald-100 text-emerald-700 py-3 rounded-xl font-bold hover:bg-emerald-200 transition-colors"
-                  >
-                    <CheckCircle size={20} />
-                    <span>{t('itWorks')}</span>
-                  </button>
-                  <button 
-                    onClick={() => handleAction('refuse')}
-                    className="flex items-center justify-center space-x-2 bg-red-100 text-red-700 py-3 rounded-xl font-bold hover:bg-red-200 transition-colors"
-                  >
-                    <XCircle size={20} />
-                    <span>{t('notInterested')}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const CreateAd = () => {
-  const { t, language } = useLanguage();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    type: 'proposition',
-    category: 'labor',
-    title: '',
-    description: '',
-    location: '',
-    start_date: '',
-    end_date: '',
-    photo: '',
-    availability: {
-      'Lun': { start: '08:00', end: '17:00' },
-      'Mar': { start: '08:00', end: '17:00' },
-      'Mer': { start: '08:00', end: '17:00' },
-      'Jeu': { start: '08:00', end: '17:00' },
-      'Ven': { start: '08:00', end: '17:00' },
-    } as any,
-  });
-
-  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) return alert("Image trop lourde (max 5Mo)");
-      const resized = await resizeImage(file);
-      setForm({ ...form, photo: resized });
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setLoading(true);
-    const ad = {
-      ...form,
-      id: generateId(),
-      user_id: user.id,
-      pseudo: user.pseudo,
-      created_at: new Date().toISOString(),
-      status: 'open',
-      availability: {} // Simplified for now
-    };
-
-    if (navigator.onLine) {
-      await fetch('/api/ads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ad)
-      });
-    } else {
-      await addToSyncQueue({ type: 'ad', action: 'create', data: ad });
-      const db = await initDB();
-      await db.add('ads', ad);
-    }
-    navigate('/');
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-xl p-8 space-y-8">
-        <h1 className="text-2xl font-bold text-gray-900">{t('createAd')}</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <button 
-              type="button"
-              onClick={() => setForm({ ...form, type: 'proposition' })}
-              className={cn(
-                "py-3 rounded-xl font-bold border-2 transition-all",
-                form.type === 'proposition' ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-gray-100 text-gray-400"
-              )}
-            >
-              {t('proposition')}
-            </button>
-            <button 
-              type="button"
-              onClick={() => setForm({ ...form, type: 'demand' })}
-              className={cn(
-                "py-3 rounded-xl font-bold border-2 transition-all",
-                form.type === 'demand' ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-100 text-gray-400"
-              )}
-            >
-              {t('demand')}
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">{t('category')}</label>
-            <select 
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-              value={form.category}
-              onChange={e => setForm({ ...form, category: e.target.value })}
-            >
-              {CATEGORIES.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.label[language]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">Tit</label>
-            <input 
-              type="text" 
-              required
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-              value={form.title}
-              onChange={e => setForm({ ...form, title: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">Deskripsyon</label>
-            <textarea 
-              required
-              rows={4}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
-              value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">{t('location')}</label>
-            <input 
-              type="text" 
-              required
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-              value={form.location}
-              onChange={e => setForm({ ...form, location: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">Dat kòmansman</label>
-              <input 
-                type="date" 
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={form.start_date}
-                onChange={e => setForm({ ...form, start_date: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">Dat fen</label>
-              <input 
-                type="date" 
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={form.end_date}
-                onChange={e => setForm({ ...form, end_date: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">{t('adPhoto')}</label>
-            <div className="relative group">
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handlePhoto}
-                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-              />
-              <div className="w-full aspect-video border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 group-hover:border-emerald-500 group-hover:text-emerald-500 transition-all overflow-hidden">
-                {form.photo ? (
-                  <img src={form.photo} className="w-full h-full object-cover" />
-                ) : (
-                  <>
-                    <ImageIcon size={48} className="mb-2" />
-                    <span className="text-sm font-medium">Klike pou chwazi yon foto</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <label className="text-sm font-bold text-gray-700">{t('availability')}</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {Object.keys(form.availability).map(day => (
-                <div key={day} className="flex items-center space-x-2 bg-gray-50 p-2 rounded-xl">
-                  <span className="w-10 font-bold text-xs">{day}</span>
-                  <input 
-                    type="time" 
-                    className="bg-transparent text-xs outline-none"
-                    value={form.availability[day].start}
-                    onChange={e => setForm({
-                      ...form,
-                      availability: {
-                        ...form.availability,
-                        [day]: { ...form.availability[day], start: e.target.value }
-                      }
-                    })}
-                  />
-                  <span className="text-gray-400">-</span>
-                  <input 
-                    type="time" 
-                    className="bg-transparent text-xs outline-none"
-                    value={form.availability[day].end}
-                    onChange={e => setForm({
-                      ...form,
-                      availability: {
-                        ...form.availability,
-                        [day]: { ...form.availability[day], end: e.target.value }
-                      }
-                    })}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button 
-            type="submit"
-            disabled={loading}
-            className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all active:scale-[0.98] disabled:opacity-50"
-          >
-            {loading ? "Ap anrejistre..." : t('save')}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const Login = () => {
-  const { t } = useLanguage();
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
+  // Registration form state
+  const [regForm, setRegForm] = useState({
     name: '',
     pseudo: '',
     address: '',
+    city: '',
     phone: '',
-    profile_photo: '',
+    image_data: '',
+    password: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (isRegister) {
-        const newUser = { ...form, id: generateId(), categories: [] };
-        if (navigator.onLine) {
-          const res = await fetch('/api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newUser)
-          });
-          
-          if (res.ok) {
-            login(newUser);
-            navigate('/');
-          } else {
-            const text = await res.text();
-            try {
-              const data = JSON.parse(text);
-              alert("Erreur d'inscription : " + (data.error || "Inconnu"));
-            } catch (e) {
-              alert("Erreur Serveur (Vercel) : " + text.substring(0, 100));
-            }
+  // Ad form state
+  const [adForm, setAdForm] = useState({
+    type: 'offer' as 'offer' | 'request',
+    category: CATEGORIES[0],
+    title: '',
+    description: '',
+    exchange_category: CATEGORIES[0],
+    start_date: '',
+    end_date: '',
+    is_all_year: false,
+    availability_details: '',
+    image_data: ''
+  });
+
+  const resizeImage = (base64Str: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
           }
         } else {
-          await addToSyncQueue({ type: 'user', action: 'create', data: newUser });
-          login(newUser);
-          navigate('/');
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
         }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, target: 'reg' | 'ad') => {
+    const file = e.target.files?.[0];
+    if (!file || !isOnline) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const resized = await resizeImage(reader.result as string);
+      if (target === 'reg') {
+        setRegForm({ ...regForm, image_data: resized });
       } else {
-        if (navigator.onLine) {
-          const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: form.email, password: form.password })
-          });
-          if (res.ok) {
-            login(await res.json());
-            navigate('/');
-          } else {
-            const text = await res.text();
-            try {
-              const data = JSON.parse(text);
-              alert("Erreur de connexion : " + (data.error || "Identifiants invalides"));
-            } catch (e) {
-              alert("Erreur Serveur (Vercel) : " + text.substring(0, 100));
-            }
-          }
-        } else {
-          alert("Koneksyon entènèt nesesè pou premye koneksyon an.");
+        setAdForm({ ...adForm, image_data: resized });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  useEffect(() => {
+    fetchAds();
+    fetchGallery();
+  }, [filters]);
+
+  const fetchGallery = async () => {
+    const res = await fetch('/api/gallery');
+    const data = await res.json();
+    setGallery(data);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const resized = await resizeImage(reader.result as string);
+      const res = await fetch('/api/gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_data: resized, caption: '' })
+      });
+      if (res.ok) {
+        fetchGallery();
+      }
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'Miam-Miam - Troc Agricole en Haïti',
+        text: 'Rejoignez la plateforme de troc agricole solidaire en Haïti !',
+        url: appUrl,
+      });
+    } else {
+      navigator.clipboard.writeText(appUrl);
+      alert(t.alerts.appLinkCopied);
+    }
+  };
+
+  const handleShareAd = (ad: Ad) => {
+    const shareText = `${ad.type === 'offer' ? t.adTypes.offer : t.adTypes.request} : ${ad.title}\n${ad.description}\n\nRetrouvez cette annonce sur Miam-Miam !`;
+    const shareUrl = `${appUrl}?ad=${ad.id}`;
+
+    if (navigator.share) {
+      navigator.share({
+        title: `Miam-Miam - ${ad.title}`,
+        text: shareText,
+        url: shareUrl,
+      });
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      alert(t.alerts.adLinkCopied);
+    }
+  };
+
+  const fetchAdMessages = async (adId: number) => {
+    if (!user) return;
+    const res = await fetch(`/api/messages/ad/${adId}?userId=${user.id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setAdMessages(data);
+    }
+  };
+
+  const fetchUserMessages = async (userId: number) => {
+    const res = await fetch(`/api/messages/user/${userId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setUserMessages(data);
+    }
+  };
+
+  const handleSendMessage = async (receiverId: number, type: 'normal' | 'deal_accepted' | 'deal_rejected' = 'normal') => {
+    if (!user || !selectedAd || (!messageContent && type === 'normal')) return;
+
+    const payload = {
+      ad_id: selectedAd.id,
+      sender_id: user.id,
+      receiver_id: receiverId,
+      content: messageContent || (type === 'deal_accepted' ? (lang === 'fr' ? 'Accord conclu !' : 'Akò konkli !') : (lang === 'fr' ? 'Désolé, je ne suis pas intéressé.' : 'Padon, mwen pa enterese.')),
+      type
+    };
+
+    if (!navigator.onLine) {
+      await db.addToSyncQueue({
+        type: 'SEND_MESSAGE',
+        payload,
+        timestamp: Date.now()
+      });
+      // Register for background sync if possible
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        try {
+          await (registration as any).sync.register('sync-miam-miam');
+        } catch (e) {
+          console.log('Background sync registration failed', e);
         }
       }
-    } catch (err: any) {
-      alert("Erreur réseau : " + err.message);
+      setMessageContent('');
+      alert(t.alerts.messageQueued);
+      return;
+    }
+
+    const res = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      setMessageContent('');
+      fetchAdMessages(selectedAd.id);
+    }
+  };
+
+  const handleCloseAd = async (adId: number) => {
+    const res = await fetch(`/api/ads/${adId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'closed' })
+    });
+    if (res.ok) {
+      fetchAds();
+      setSelectedAd(null);
+    }
+  };
+
+  const fetchAds = async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams(filters).toString();
+      const res = await fetch(`/api/ads?${query}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAds(data);
+        db.saveAds(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch ads, using cache', e);
+      const cachedAds = await db.getAds();
+      if (cachedAds.length > 0) setAds(cachedAds as Ad[]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!navigator.onLine) {
+      // Offline registration
+      const tempId = Date.now(); // Temporary ID
+      const newUser = { ...regForm, id: tempId };
+      setUser(newUser);
+      db.saveUser(newUser);
+      
+      await db.addToSyncQueue({
+        type: 'REGISTER_USER',
+        payload: regForm,
+        timestamp: Date.now()
+      });
+
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        try {
+          await (registration as any).sync.register('sync-miam-miam');
+        } catch (e) {
+          console.log('Background sync registration failed', e);
+        }
+      }
+
+      setShowRegister(false);
+      alert(t.alerts.registerQueued);
+      return;
+    }
+
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(regForm)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const newUser = { ...regForm, id: data.id };
+      setUser(newUser);
+      db.saveUser(newUser);
+      setShowRegister(false);
+    } else {
+      const err = await res.json();
+      alert(t.alerts.registerError);
+    }
+  };
+
+  const handleLogin = async (pseudo: string, password?: string) => {
+    if (!navigator.onLine) {
+      // Try to login with cached user
+      const cachedUser = await db.getUser();
+      if (cachedUser && cachedUser.pseudo === pseudo) {
+        // In a real app we'd check the password here too
+        setUser(cachedUser);
+        setShowRegister(false);
+        return;
+      }
+      alert(t.alerts.loginOfflineError);
+      return;
+    }
+
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pseudo, password })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setUser(data);
+      db.saveUser(data);
+      setShowRegister(false);
+    } else {
+      alert(t.alerts.loginError);
+    }
+  };
+
+  const handleCreateAd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const payload = { 
+      ...adForm, 
+      user_id: user.id, 
+      description: `${adForm.description}\n\nDisponibilité: ${adForm.availability_details}` 
+    };
+
+    if (!navigator.onLine) {
+      await db.addToSyncQueue({
+        type: 'CREATE_AD',
+        payload,
+        timestamp: Date.now()
+      });
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        try {
+          await (registration as any).sync.register('sync-miam-miam');
+        } catch (e) {
+          console.log('Background sync registration failed', e);
+        }
+      }
+      setShowCreateAd(false);
+      alert(t.alerts.adQueued);
+      return;
+    }
+
+    const res = await fetch('/api/ads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      setShowCreateAd(false);
+      fetchAds();
+      setAdForm({
+        type: 'offer',
+        category: CATEGORIES[0],
+        title: '',
+        description: '',
+        exchange_category: CATEGORIES[0],
+        start_date: '',
+        end_date: '',
+        is_all_year: false,
+        availability_details: '',
+        image_data: ''
+      });
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12 bg-gray-50">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 space-y-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">{isRegister ? t('register') : t('login')}</h2>
-          <p className="mt-2 text-gray-500">Byenveni sou Twokaj</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && (
-            <>
-              <input 
-                type="text" 
-                placeholder={t('name')}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-              />
-              <input 
-                type="text" 
-                placeholder={t('pseudo')}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={form.pseudo}
-                onChange={e => setForm({ ...form, pseudo: e.target.value })}
-              />
-              <input 
-                type="text" 
-                placeholder={t('address')}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={form.address}
-                onChange={e => setForm({ ...form, address: e.target.value })}
-              />
-            </>
-          )}
-          <input 
-            type="email" 
-            placeholder={t('email')}
-            required
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-            value={form.email}
-            onChange={e => setForm({ ...form, email: e.target.value })}
-          />
-          <input 
-            type="password" 
-            placeholder={t('password')}
-            required
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-            value={form.password}
-            onChange={e => setForm({ ...form, password: e.target.value })}
-          />
-          
-          <button 
-            type="submit"
-            className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-emerald-700 transition-all active:scale-[0.98]"
-          >
-            {isRegister ? t('register') : t('login')}
-          </button>
-        </form>
-
-        <div className="text-center">
-          <button 
-            onClick={() => setIsRegister(!isRegister)}
-            className="text-emerald-600 font-medium hover:underline"
-          >
-            {isRegister ? "Ou gen yon kont deja ? Konekte" : "Ou pa gen kont ? Enskri"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Profile = () => {
-  const { user, logout } = useAuth();
-  const { t } = useLanguage();
-  const [ads, setAds] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchMyAds = async () => {
-      const db = await initDB();
-      const localAds = await db.getAll('ads');
-      setAds(localAds.filter(a => a.user_id === user?.id));
-    };
-    fetchMyAds();
-  }, [user]);
-
-  if (!user) return null;
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-xl p-8 flex flex-col md:flex-row items-center gap-8">
-        <div className="w-32 h-32 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 text-4xl font-bold border-4 border-white shadow-lg overflow-hidden">
-          {user.profile_photo ? <img src={user.profile_photo} className="w-full h-full object-cover" /> : user.pseudo[0].toUpperCase()}
-        </div>
-        <div className="flex-1 text-center md:text-left space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">{user.name}</h1>
-          <p className="text-gray-500 font-medium">@{user.pseudo}</p>
-          <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-400">
-            <span className="flex items-center"><MapPin size={14} className="mr-1" /> {user.address}</span>
-            {user.phone && <span className="flex items-center"><Clock size={14} className="mr-1" /> {user.phone}</span>}
-          </div>
-        </div>
-        <button onClick={logout} className="px-6 py-2 border border-red-100 text-red-500 rounded-full font-bold hover:bg-red-50 transition-colors">
-          {t('login')}
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">{t('myAds')}</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {ads.map(ad => (
-            <div key={ad.id} className="relative">
-              <AdCard ad={ad} />
-              {ad.status === 'open' && (
-                <button 
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (navigator.onLine) {
-                      await fetch(`/api/ads/${ad.id}/close`, { method: 'PATCH' });
-                    }
-                    const db = await initDB();
-                    await db.put('ads', { ...ad, status: 'closed' });
-                    setAds(ads.map(a => a.id === ad.id ? { ...a, status: 'closed' } : a));
-                  }}
-                  className="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg hover:bg-red-600 transition-colors"
-                >
-                  {t('closeAd')}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const GalleryView = () => {
-  const { t } = useLanguage();
-  const { user } = useAuth();
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newPhoto, setNewPhoto] = useState({ photo_url: '', description: '' });
-
-  useEffect(() => {
-    const fetchGallery = async () => {
-      try {
-        const res = await fetch('/api/gallery');
-        const data = await res.json();
-        setItems(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchGallery();
-  }, []);
-
-  const handleAdd = async () => {
-    const item = { ...newPhoto, id: generateId() };
-    await fetch('/api/gallery', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item)
-    });
-    setItems([item, ...items]);
-    setShowAdd(false);
-    setNewPhoto({ photo_url: '', description: '' });
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">{t('gallery')}</h1>
-        {user?.is_admin && (
-          <button 
-            onClick={() => setShowAdd(true)}
-            className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold flex items-center space-x-2"
-          >
-            <PlusCircle size={20} />
-            <span>Ajoute foto</span>
-          </button>
-        )}
-      </div>
-
-      {showAdd && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-lg space-y-4">
-          <input 
-            type="file" 
-            accept="image/*"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (file) setNewPhoto({ ...newPhoto, photo_url: await resizeImage(file) });
-            }}
-            className="w-full"
-          />
-          <input 
-            type="text" 
-            placeholder="Deskripsyon"
-            className="w-full px-4 py-2 border border-gray-200 rounded-xl"
-            value={newPhoto.description}
-            onChange={e => setNewPhoto({ ...newPhoto, description: e.target.value })}
-          />
-          <div className="flex gap-2">
-            <button onClick={handleAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold">Anrejistre</button>
-            <button onClick={() => setShowAdd(false)} className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold">Anile</button>
-          </div>
+    <div className="min-h-screen pb-20 bg-stone-50">
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className="bg-amber-500 text-white text-center py-1 text-xs font-bold sticky top-0 z-50 flex items-center justify-center gap-2">
+          <Globe size={12} className="animate-pulse" />
+          {t.offlineMode}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {items.map(item => (
-          <div key={item.id} className="aspect-square rounded-2xl overflow-hidden bg-gray-100 group relative">
-            <img src={item.photo_url} alt={item.description} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-            {item.description && (
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                <p className="text-white text-xs font-medium">{item.description}</p>
+      {/* Header */}
+      <header className="bg-white border-b border-stone-200 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-serif text-xl font-bold">M</div>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold text-primary tracking-tight leading-none">{t.appName}</h1>
+              <span className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">{t.tagline}</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button 
+              onClick={() => setLang(lang === 'fr' ? 'ht' : 'fr')}
+              className="flex items-center gap-1 px-2 py-1 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-600 transition-colors"
+              title="Changer de langue / Chanje lang"
+            >
+              <Languages size={16} />
+              <span className="text-xs font-bold uppercase">{lang === 'fr' ? 'HT' : 'FR'}</span>
+            </button>
+
+            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-stone-50 rounded-full border border-stone-100">
+              {isOnline ? (
+                <Wifi size={14} className="text-emerald-500" />
+              ) : (
+                <Wifi size={14} className="text-stone-300" />
+              )}
+              <span className="text-[10px] font-bold uppercase text-stone-500">
+                {isOnline ? (lang === 'fr' ? 'Mode Internet' : 'Mòd Entènèt') : (lang === 'fr' ? 'Mode Local' : 'Mòd Lokal')}
+              </span>
+            </div>
+            
+            <button 
+              onClick={handleShare}
+              className="p-2 hover:bg-stone-100 rounded-full text-stone-500 transition-colors"
+              title="Partager l'application"
+            >
+              <Share2 size={20} />
+            </button>
+
+            {user ? (
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:block text-right">
+                  <p className="text-sm font-bold leading-tight">{user.pseudo}</p>
+                  <p className="text-[10px] text-stone-500 uppercase tracking-wider">{user.city}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-stone-100 border border-stone-200 flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => {
+                  setShowProfile(true);
+                  fetchUserMessages(user.id);
+                }}>
+                  {user.image_data ? (
+                    <img src={user.image_data} alt={user.pseudo} className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon size={20} className="text-stone-400" />
+                  )}
+                </div>
+                <button 
+                  onClick={() => setUser(null)}
+                  className="p-2 hover:bg-stone-100 rounded-full text-stone-500 transition-colors"
+                  title={t.logout}
+                >
+                  <LogOut size={18} />
+                </button>
               </div>
+            ) : (
+              <button 
+                onClick={() => setShowRegister(true)}
+                className="btn-primary flex items-center gap-2"
+              >
+                <UserIcon size={18} />
+                <span className="hidden sm:inline">{t.login} / {t.register}</span>
+              </button>
             )}
           </div>
-        ))}
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        {/* Hero & Search */}
+        <section className="mb-12 text-center">
+          <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-stone-800">{lang === 'fr' ? 'Troc Agricole en Haïti' : 'Trok Agrikòl nan Ayiti'}</h2>
+          <p className="text-lg text-stone-600 mb-8 max-w-2xl mx-auto">
+            {lang === 'fr' 
+              ? 'Échangez vos récoltes, votre temps et vos outils. Unissons-nous pour une agriculture solidaire.'
+              : 'Chanje rekòt nou, tan nou ak zouti nou. Ann mete tèt nou ansanm pou yon agrikilti solidè.'
+            }
+          </p>
+          
+          <div className="card p-2 flex flex-col sm:flex-row gap-2 max-w-3xl mx-auto">
+            <div className="flex-1 flex items-center px-4 gap-2 border-b sm:border-b-0 sm:border-r border-stone-100">
+              <Filter size={18} className="text-stone-400" />
+              <select 
+                className="w-full py-3 bg-transparent focus:outline-none text-stone-700"
+                value={filters.category}
+                onChange={(e) => setFilters({...filters, category: e.target.value})}
+              >
+                <option value="">{t.allCategories}</option>
+                {CATEGORIES.map(cat => <option key={cat} value={cat}>{(t.categories as any)[cat] || cat}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 flex items-center px-4 gap-2 border-b sm:border-b-0 sm:border-r border-stone-100">
+              <MapPin size={18} className="text-stone-400" />
+              <input 
+                type="text" 
+                placeholder={t.allCities} 
+                className="w-full py-3 bg-transparent focus:outline-none"
+                value={filters.city}
+                onChange={(e) => setFilters({...filters, city: e.target.value})}
+              />
+            </div>
+            <div className="flex-1 flex items-center px-4 gap-2">
+              <Calendar size={18} className="text-stone-400" />
+              <input 
+                type="date" 
+                className="w-full py-3 bg-transparent focus:outline-none"
+                value={filters.date}
+                onChange={(e) => setFilters({...filters, date: e.target.value})}
+              />
+            </div>
+            <button 
+              onClick={fetchAds}
+              className="bg-primary text-white p-3 rounded-2xl sm:aspect-square flex items-center justify-center"
+            >
+              <Search size={20} />
+            </button>
+          </div>
+        </section>
+
+        {/* Ads List */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold">{lang === 'fr' ? 'Annonces récentes' : 'Dènye anons yo'}</h3>
+            {user && (
+              <button 
+                onClick={() => setShowCreateAd(true)}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Plus size={18} />
+                {t.createAd}
+              </button>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+          ) : ads.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {ads.map(ad => (
+                <motion.div 
+                  key={ad.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onClick={() => {
+                    setSelectedAd(ad);
+                    setReplyToUser(null);
+                    fetchAdMessages(ad.id);
+                  }}
+                  className="card p-6 flex flex-col gap-4 hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-stone-100 border border-stone-200 overflow-hidden flex-shrink-0">
+                        {ad.user_image ? (
+                          <img src={ad.user_image} alt={ad.pseudo} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-stone-400">
+                            <UserIcon size={14} />
+                          </div>
+                        )}
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        ad.type === 'offer' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {ad.type === 'offer' ? t.offer : t.request}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-stone-400 font-medium">
+                        {new Date(ad.created_at).toLocaleDateString()}
+                      </span>
+                      <button 
+                        onClick={() => handleShareAd(ad)}
+                        className="p-1.5 hover:bg-stone-100 rounded-full text-stone-400 transition-colors"
+                        title="Partager cette annonce"
+                      >
+                        <Share2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {ad.image_data && (
+                    <div className="aspect-video w-full rounded-2xl overflow-hidden border border-stone-100">
+                      <img src={ad.image_data} alt={ad.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-xl font-bold mb-1 leading-tight">{ad.title}</h4>
+                    <p className="text-stone-600 text-sm line-clamp-2">{ad.description}</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 text-sm mt-auto pt-4 border-t border-stone-50">
+                    <div className="flex items-center gap-1.5 text-stone-500">
+                      <UserIcon size={14} />
+                      <span className="font-medium">{ad.pseudo}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-stone-500">
+                      <MapPin size={14} />
+                      <span>{ad.user_city}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-stone-500">
+                      <Calendar size={14} />
+                      <span>{ad.is_all_year ? t.availableAllYear : `${t.availableFrom} ${new Date(ad.start_date!).toLocaleDateString()} ${t.availableTo} ${new Date(ad.end_date!).toLocaleDateString()}`}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-stone-50 p-3 rounded-2xl flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-stone-400">{t.filterCategory}</span>
+                      <span className="text-sm font-medium capitalize">{(t.categories as any)[ad.category] || ad.category}</span>
+                    </div>
+                    <ArrowRightLeft size={16} className="text-stone-300" />
+                    <div className="flex flex-col text-right">
+                      <span className="text-[10px] uppercase font-bold text-stone-400">{t.exchangeWith}</span>
+                      <span className="text-sm font-medium capitalize">{(t.categories as any)[ad.exchange_category] || ad.exchange_category}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-stone-300">
+              <p className="text-stone-500">{t.noAds}</p>
+            </div>
+          )}
+        </section>
+
+        {/* Image Gallery */}
+        <section className="mt-16 border-t border-stone-200 pt-12">
+          <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
+            <h3 className="text-2xl font-bold text-center sm:text-left">{lang === 'fr' ? 'La solidarité en images' : 'Solidarite an imaj'}</h3>
+            {user && (
+              <label className="btn-primary flex items-center gap-2 cursor-pointer text-sm">
+                <Plus size={16} />
+                {lang === 'fr' ? 'Ajouter une photo' : 'Ajoute yon foto'}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleImageUpload}
+                  disabled={uploading}
+                />
+              </label>
+            )}
+          </div>
+
+          {gallery.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {gallery.map((img) => (
+                <motion.div 
+                  key={img.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="aspect-[3/4] rounded-3xl overflow-hidden shadow-sm border border-stone-200 group relative"
+                >
+                  <img 
+                    src={img.image_data} 
+                    alt={img.caption || "Photo de la galerie"} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 opacity-50 grayscale">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="aspect-[3/4] rounded-3xl bg-stone-200 animate-pulse" />
+              ))}
+            </div>
+          )}
+          
+          <p className="text-center text-stone-500 text-sm mt-8 italic max-w-lg mx-auto">
+            {lang === 'fr' 
+              ? '"M\'ap ede nou fè jaden an pou yon pati nan rekòt la." - Partagez vos moments de solidarité agricole.'
+              : '"M ap ede nou fè jaden an pou yon pati nan rekòt la." - Pataje moman solidarite agrikòl nou yo.'
+            }
+          </p>
+        </section>
+      </main>
+
+      {/* Ad Detail Modal */}
+      <AnimatePresence>
+        {selectedAd && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl w-full max-w-3xl p-8 shadow-2xl relative my-8"
+            >
+              <button 
+                onClick={() => {
+                  setSelectedAd(null);
+                  setReplyToUser(null);
+                }}
+                className="absolute top-6 right-6 p-2 hover:bg-stone-100 rounded-full"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  {selectedAd.image_data && (
+                    <img src={selectedAd.image_data} alt={selectedAd.title} className="w-full aspect-video object-cover rounded-2xl" />
+                  )}
+                  <div>
+                    <h3 className="text-3xl font-bold mb-2">{selectedAd.title}</h3>
+                    <p className="text-stone-600">{selectedAd.description}</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <div className="flex items-center gap-1.5 text-stone-500">
+                      <UserIcon size={14} />
+                      <span className="font-medium">{selectedAd.pseudo}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-stone-500">
+                      <MapPin size={14} />
+                      <span>{selectedAd.user_city}</span>
+                    </div>
+                  </div>
+
+                  {user && user.id === selectedAd.user_id && (
+                    <button 
+                      onClick={() => handleCloseAd(selectedAd.id)}
+                      className="w-full py-3 rounded-xl bg-stone-100 text-stone-600 font-bold hover:bg-stone-200 transition-colors"
+                    >
+                      {t.closeAd}
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col h-[500px] bg-stone-50 rounded-2xl overflow-hidden border border-stone-100">
+                  <div className="p-4 border-b border-stone-200 bg-white flex items-center gap-2">
+                    <MessageSquare size={18} className="text-stone-400" />
+                    <h4 className="font-bold">{lang === 'fr' ? 'Discussions' : 'Diskisyon'}</h4>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {adMessages.length > 0 ? adMessages.map(msg => (
+                      <div 
+                        key={msg.id} 
+                        onClick={() => {
+                          if (user && selectedAd && user.id === selectedAd.user_id && msg.sender_id !== user.id) {
+                            setReplyToUser({ id: msg.sender_id, pseudo: msg.sender_pseudo || '' });
+                          }
+                        }}
+                        className={`flex flex-col ${msg.sender_id === user?.id ? 'items-end' : 'items-start'} ${
+                          user?.id === selectedAd?.user_id && msg.sender_id !== user?.id ? 'cursor-pointer hover:opacity-80' : ''
+                        }`}
+                      >
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                          replyToUser?.id === msg.sender_id ? 'ring-2 ring-primary ring-offset-1' : ''
+                        } ${
+                          msg.type === 'deal_accepted' ? 'bg-emerald-100 text-emerald-800' :
+                          msg.type === 'deal_rejected' ? 'bg-amber-100 text-amber-800' :
+                          msg.sender_id === user?.id ? 'bg-primary text-white' : 'bg-white border border-stone-200 text-stone-700'
+                        }`}>
+                          <p className="font-bold text-[10px] mb-1 opacity-70">{msg.sender_pseudo}</p>
+                          <p>{msg.content}</p>
+                        </div>
+                        <span className="text-[10px] text-stone-400 mt-1">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                      </div>
+                    )) : (
+                      <div className="h-full flex items-center justify-center text-stone-400 text-sm italic">
+                        {lang === 'fr' ? 'Aucun message pour le moment.' : 'Pa gen mesaj pou kounye a.'}
+                      </div>
+                    )}
+                  </div>
+
+                  {user && (
+                    <div className="p-4 bg-white border-t border-stone-200 space-y-3">
+                      {user.id !== selectedAd.user_id ? (
+                        <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            placeholder={t.typeMessage}
+                            className="input-field flex-1"
+                            value={messageContent}
+                            onChange={e => setMessageContent(e.target.value)}
+                          />
+                          <button 
+                            onClick={() => handleSendMessage(selectedAd.user_id)}
+                            className="p-3 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors"
+                          >
+                            <Send size={18} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {replyToUser ? (
+                            <>
+                              <div className="flex items-center justify-between bg-stone-100 px-3 py-1.5 rounded-lg text-[10px] font-bold text-stone-500">
+                                <span>{lang === 'fr' ? 'Réponse à' : 'Repons pou'} @{replyToUser.pseudo}</span>
+                                <button onClick={() => setReplyToUser(null)}><X size={12} /></button>
+                              </div>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  placeholder={`${lang === 'fr' ? 'Répondre à' : 'Reponn'} ${replyToUser.pseudo}...`}
+                                  className="input-field flex-1"
+                                  value={messageContent}
+                                  onChange={e => setMessageContent(e.target.value)}
+                                />
+                                <button 
+                                  onClick={() => handleSendMessage(replyToUser.id)}
+                                  className="p-3 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors"
+                                >
+                                  <Send size={18} />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button 
+                                  onClick={() => handleSendMessage(replyToUser.id, 'deal_accepted')}
+                                  className="flex items-center justify-center gap-2 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-xs hover:bg-emerald-100 transition-colors"
+                                >
+                                  <CheckCircle2 size={14} />
+                                  {t.dealAccepted}
+                                </button>
+                                <button 
+                                  onClick={() => handleSendMessage(replyToUser.id, 'deal_rejected')}
+                                  className="flex items-center justify-center gap-2 py-2 bg-amber-50 text-amber-600 rounded-xl font-bold text-xs hover:bg-amber-100 transition-colors"
+                                >
+                                  <XCircle size={14} />
+                                  {t.dealRejected}
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-[10px] text-stone-400 text-center italic py-2">
+                              {lang === 'fr' ? 'Cliquez sur un message pour répondre à un utilisateur.' : 'Klike sou yon mesaj pou reponn yon itilizatè.'}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {user.id !== selectedAd.user_id && !adMessages.some(m => m.sender_id === user.id) && (
+                        <button 
+                          onClick={() => handleSendMessage(selectedAd.user_id)}
+                          className="w-full py-2 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 transition-colors"
+                        >
+                          {t.contact}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {showProfile && user && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl w-full max-w-2xl p-8 shadow-2xl relative my-8"
+            >
+              <button 
+                onClick={() => setShowProfile(false)}
+                className="absolute top-6 right-6 p-2 hover:bg-stone-100 rounded-full"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center gap-6 mb-8">
+                <div className="w-24 h-24 rounded-full bg-stone-100 border-2 border-stone-200 overflow-hidden">
+                  {user.image_data ? (
+                    <img src={user.image_data} alt={user.pseudo} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <UserIcon size={40} />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-3xl font-bold">{user.name}</h3>
+                  <p className="text-stone-500">@{user.pseudo} • {user.city}</p>
+                </div>
+              </div>
+
+              <h4 className="font-bold mb-4 border-b pb-2">{lang === 'fr' ? 'Mes Annonces' : 'Anons mwen yo'}</h4>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                {ads.filter(a => a.user_id === user.id).length > 0 ? (
+                  ads.filter(a => a.user_id === user.id).map(ad => (
+                    <div key={ad.id} className="p-4 bg-stone-50 rounded-2xl flex items-center justify-between">
+                      <div>
+                        <p className="font-bold">{ad.title}</p>
+                        <p className="text-xs text-stone-500">{new Date(ad.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setSelectedAd(ad);
+                          setShowProfile(false);
+                          setReplyToUser(null);
+                          fetchAdMessages(ad.id);
+                        }}
+                        className="text-primary text-sm font-bold"
+                      >
+                        {t.profile.viewDetails}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-stone-400 italic text-sm">{t.profile.noAds}</p>
+                )}
+              </div>
+
+              <h4 className="font-bold mb-4 border-b pb-2 mt-8">{t.myMessages}</h4>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                {userMessages.length > 0 ? (
+                  userMessages.map(msg => (
+                    <div key={msg.id} className="p-4 bg-stone-50 rounded-2xl">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-xs font-bold text-primary uppercase">{msg.ad_title}</p>
+                        <p className="text-[10px] text-stone-400">{new Date(msg.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <p className="text-sm font-medium">{t.adCard.from}: {msg.sender_pseudo}</p>
+                      <p className="text-sm text-stone-600 line-clamp-1">{msg.content}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-stone-400 italic text-sm">{t.messages.noMessages}</p>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showRegister && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl relative my-auto"
+            >
+              <button 
+                onClick={() => setShowRegister(false)}
+                className="absolute top-6 right-6 p-2 hover:bg-stone-100 rounded-full"
+              >
+                <X size={20} />
+              </button>
+              
+              <h3 className="text-3xl font-bold mb-6">{t.registerTitle}</h3>
+              
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="flex justify-center mb-4">
+                  <label className="relative cursor-pointer group">
+                    <div className="w-20 h-20 rounded-full bg-stone-100 border-2 border-dashed border-stone-300 flex items-center justify-center overflow-hidden transition-colors group-hover:border-emerald-400">
+                      {regForm.image_data ? (
+                        <img src={regForm.image_data} alt="Aperçu" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center">
+                          <Plus size={20} className="mx-auto text-stone-400" />
+                          <span className="text-[8px] text-stone-500 font-bold uppercase">{t.login.photo}</span>
+                        </div>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={e => handleFileChange(e, 'reg')}
+                      disabled={!isOnline}
+                    />
+                    {!isOnline && (
+                      <div className="absolute inset-0 bg-stone-50/80 flex items-center justify-center rounded-full">
+                        <Globe size={14} className="text-stone-400" />
+                      </div>
+                    )}
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.fullName}</label>
+                  <input 
+                    required
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Jean Dupont"
+                    value={regForm.name}
+                    onChange={e => setRegForm({...regForm, name: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.pseudo}</label>
+                  <input 
+                    required
+                    type="text" 
+                    className="input-field" 
+                    placeholder="jeannot2026"
+                    value={regForm.pseudo}
+                    onChange={e => setRegForm({...regForm, pseudo: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.password}</label>
+                  <input 
+                    required
+                    type="password" 
+                    className="input-field" 
+                    placeholder="••••••••"
+                    value={regForm.password}
+                    onChange={e => setRegForm({...regForm, password: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">{t.city}</label>
+                    <input 
+                      required
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Aquin"
+                      value={regForm.city}
+                      onChange={e => setRegForm({...regForm, city: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">{t.phone}</label>
+                    <input 
+                      type="tel" 
+                      className="input-field" 
+                      placeholder="+509 ..."
+                      value={regForm.phone}
+                      onChange={e => setRegForm({...regForm, phone: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.address}</label>
+                  <textarea 
+                    required
+                    className="input-field h-20 resize-none" 
+                    placeholder="Rue des Manguiers..."
+                    value={regForm.address}
+                    onChange={e => setRegForm({...regForm, address: e.target.value})}
+                  />
+                </div>
+                <button type="submit" className="btn-primary w-full py-3 mt-4 text-lg">
+                  {t.registerButton}
+                </button>
+              </form>
+
+              <div className="mt-4 pt-4 border-t border-stone-100 text-center">
+                <p className="text-xs text-stone-500 mb-3">{t.alreadyRegistered}</p>
+                <div className="space-y-2">
+                  <input 
+                    type="text" 
+                    id="login-pseudo"
+                    placeholder={t.pseudo} 
+                    className="input-field w-full py-2 text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <input 
+                      type="password" 
+                      id="login-password"
+                      placeholder={t.login.password} 
+                      className="input-field flex-1 py-2 text-sm"
+                    />
+                    <button 
+                      onClick={() => {
+                        const pseudo = (document.getElementById('login-pseudo') as HTMLInputElement).value;
+                        const pass = (document.getElementById('login-password') as HTMLInputElement).value;
+                        if (pseudo && pass) handleLogin(pseudo, pass);
+                      }}
+                      className="bg-stone-100 text-stone-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-stone-200 transition-colors"
+                    >
+                      {t.loginButton}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Create Ad Modal */}
+      <AnimatePresence>
+        {showCreateAd && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl w-full max-w-2xl p-8 shadow-2xl relative my-8"
+            >
+              <button 
+                onClick={() => setShowCreateAd(false)}
+                className="absolute top-6 right-6 p-2 hover:bg-stone-100 rounded-full"
+              >
+                <X size={20} />
+              </button>
+              
+              <h3 className="text-3xl font-bold mb-6">{t.createAdTitle}</h3>
+              
+              <form onSubmit={handleCreateAd} className="space-y-6">
+                <div className="flex justify-center">
+                  <label className="relative cursor-pointer group w-full">
+                    <div className="w-full h-40 rounded-3xl bg-stone-100 border-2 border-dashed border-stone-300 flex items-center justify-center overflow-hidden transition-colors group-hover:border-emerald-400">
+                      {adForm.image_data ? (
+                        <img src={adForm.image_data} alt="Aperçu" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center">
+                          <Plus size={32} className="mx-auto text-stone-400 mb-2" />
+                          <span className="text-xs text-stone-500 font-bold uppercase">{t.placeholders.addPhoto}</span>
+                        </div>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={e => handleFileChange(e, 'ad')}
+                      disabled={!isOnline}
+                    />
+                    {!isOnline && (
+                      <div className="absolute inset-0 bg-stone-50/80 flex items-center justify-center rounded-3xl">
+                        <Globe size={24} className="text-stone-400" />
+                      </div>
+                    )}
+                  </label>
+                </div>
+
+                <div className="flex gap-4 p-1 bg-stone-100 rounded-2xl">
+                  <button 
+                    type="button"
+                    onClick={() => setAdForm({...adForm, type: 'offer'})}
+                    className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${adForm.type === 'offer' ? 'bg-white shadow-sm text-primary' : 'text-stone-500'}`}
+                  >
+                    {t.offer.toUpperCase()}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setAdForm({...adForm, type: 'request'})}
+                    className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${adForm.type === 'request' ? 'bg-white shadow-sm text-primary' : 'text-stone-500'}`}
+                  >
+                    {t.request.toUpperCase()}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">{t.adCategory}</label>
+                    <select 
+                      className="input-field capitalize"
+                      value={adForm.category}
+                      onChange={e => setAdForm({...adForm, category: e.target.value as Category})}
+                    >
+                      {CATEGORIES.map(cat => <option key={cat} value={cat}>{(t.categories as any)[cat] || cat}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">{t.exchangeCategory}</label>
+                    <select 
+                      className="input-field capitalize"
+                      value={adForm.exchange_category}
+                      onChange={e => setAdForm({...adForm, exchange_category: e.target.value})}
+                    >
+                      {CATEGORIES.map(cat => <option key={cat} value={cat}>{(t.categories as any)[cat] || cat}</option>)}
+                      <option value="autre">{t.placeholders.other}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.createAd.adTitle}</label>
+                  <input 
+                    required
+                    type="text" 
+                    className="input-field" 
+                    placeholder={t.placeholders.adTitle}
+                    value={adForm.title}
+                    onChange={e => setAdForm({...adForm, title: e.target.value})}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.createAd.adDescription}</label>
+                  <textarea 
+                    className="input-field h-24 resize-none" 
+                    placeholder={t.placeholders.adDescription}
+                    value={adForm.description}
+                    onChange={e => setAdForm({...adForm, description: e.target.value})}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">{t.createAd.availabilityDetails}</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder={t.placeholders.availability}
+                    value={adForm.availability_details}
+                    onChange={e => setAdForm({...adForm, availability_details: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-4 p-6 bg-stone-50 rounded-3xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-bold flex items-center gap-2">
+                      <Clock size={16} />
+                      {t.availability}
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 accent-primary"
+                        checked={adForm.is_all_year}
+                        onChange={e => setAdForm({...adForm, is_all_year: e.target.checked})}
+                      />
+                      <span className="text-xs font-medium">{t.allYearRound}</span>
+                    </label>
+                  </div>
+                  
+                  {!adForm.is_all_year && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-stone-400 mb-1">{t.startDate}</label>
+                        <input 
+                          type="date" 
+                          className="input-field py-1.5"
+                          value={adForm.start_date}
+                          onChange={e => setAdForm({...adForm, start_date: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-stone-400 mb-1">{t.endDate}</label>
+                        <input 
+                          type="date" 
+                          className="input-field py-1.5"
+                          value={adForm.end_date}
+                          onChange={e => setAdForm({...adForm, end_date: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button type="submit" className="btn-primary w-full py-3 text-lg">
+                  {t.publish}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Navigation (Mobile) */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 sm:hidden px-6 py-3 flex justify-around items-center z-40">
+        <button className="flex flex-col items-center gap-1 text-primary">
+          <Search size={20} />
+          <span className="text-[10px] font-bold uppercase">{t.nav.explorer}</span>
+        </button>
+        {user && (
+          <button 
+            onClick={() => setShowCreateAd(true)}
+            className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center -mt-8 border-4 border-secondary shadow-lg"
+          >
+            <Plus size={24} />
+          </button>
+        )}
+        <button 
+          onClick={() => !user && setShowRegister(true)}
+          className="flex flex-col items-center gap-1 text-stone-400"
+        >
+          <UserIcon size={20} />
+          <span className="text-[10px] font-bold uppercase">{user ? t.nav.profile : t.nav.account}</span>
+        </button>
       </div>
     </div>
   );
-};
-
-// --- Main App ---
-
-export default function App() {
-  return (
-    <AuthProvider>
-      <LanguageProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-            <Navbar />
-            <main className="flex-1">
-              <Routes>
-                <Route path="/" element={<HomeView />} />
-                <Route path="/ad/:id" element={<AdDetail />} />
-                <Route path="/create" element={<CreateAd />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/gallery" element={<GalleryView />} />
-                <Route path="/messages" element={<div className="p-8 text-center text-gray-400 italic">Mesaj yo ap vini byento...</div>} />
-              </Routes>
-            </main>
-            <footer className="bg-white border-t border-gray-100 py-8">
-              <div className="max-w-7xl mx-auto px-4 text-center text-gray-400 text-sm">
-                &copy; 2026 Twokaj - Echanj agrikòl an Ayiti
-              </div>
-            </footer>
-          </div>
-        </Router>
-      </LanguageProvider>
-    </AuthProvider>
-  );
 }
-
-// Helper for useParams
-import { useParams } from 'react-router-dom';
