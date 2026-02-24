@@ -6,7 +6,7 @@ import { pgQuery, initPostgresTables } from "../src/db-postgres";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const isPostgres = !!(process.env.POSTGRES_URL || process.env.PROD_POSTGRES_URL || process.env.PROD_DATABASE_URL || process.env.DATABASE_URL);
 const isVercel = !!process.env.VERCEL;
 
@@ -147,7 +147,7 @@ if (process.env.NODE_ENV !== "production" && !isVercel) {
 
 // Local listen
 if (!isVercel) {
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server on ${PORT}`));
+  app.listen(Number(PORT), "0.0.0.0", () => console.log(`Server on ${PORT}`));
 }
 
 export default app;
