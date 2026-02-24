@@ -1,11 +1,11 @@
 {
-  "name": "Miam-Miam - Troc Agricole Haïti",
-  "short_name": "Miam-Miam",
-  "description": "Plateforme de troc agricole solidaire en Haïti",
+  "name": "Twokaj",
+  "short_name": "Twokaj",
+  "description": "Troc agricole en Haïti",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#10b981",
+  "theme_color": "#059669",
   "icons": [
     {
       "src": "https://picsum.photos/192/192",
